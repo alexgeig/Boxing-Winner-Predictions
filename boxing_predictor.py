@@ -4,7 +4,8 @@ import joblib
 import numpy as np
 
 # 🔃 Modell, LabelEncoder und Feature-Namen laden
-model = joblib.load("xgb_model.pkl")
+model = XGBClassifier()
+model.load_model("xgb_model.json")
 le = joblib.load("label_encoder.pkl")
 feature_names = joblib.load("feature_names.pkl")
 df = pd.read_csv("merged_df_encoded.csv")
