@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 import numpy as np
+from xgboost import XGBClassifier
 
 # 🔃 Modell, LabelEncoder und Feature-Namen laden
 model = XGBClassifier()
