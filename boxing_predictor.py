@@ -20,50 +20,49 @@ boxer_names = sorted(set(df["opponent_1_name_clean"].dropna()) | set(df["opponen
 boxer1 = st.selectbox("👤 Boxer 1", boxer_names)
 boxer2 = st.selectbox("👤 Boxer 2", [n for n in boxer_names if n != boxer1])
 
-# 🧠 Vorhersagefunktion
-def predict_theoretical_match(boxer1, boxer2, df, model, feature_names):
-    boxer_a, boxer_b = boxer1, boxer2
-
-    # Feature-Mittelwerte berechnen
-    b1_data = df[(df["opponent_1_name_clean"] == boxer_a) | (df["opponent_2_name_clean"] == boxer_a)].mean(numeric_only=True)
-    b2_data = df[(df["opponent_1_name_clean"] == boxer_b) | (df["opponent_2_name_clean"] == boxer_b)].mean(numeric_only=True)
-
-    if b1_data.empty or b2_data.empty:
-        st.error("❌ Für einen oder beide Boxer konnten keine ausreichenden Daten gefunden werden.")
-        return
-
-    # Eingabe-Datenframe aufbauen
+# 🧠 Vorhersagefunktion mit symmetrischer Vorhersage
+def predict_proba_for(b1, b2):
     input_data = {}
     for feat in feature_names:
+        val = np.nan
         if "opponent_1" in feat:
             base_feat = feat.replace("opponent_1_", "")
-            input_data[feat] = b1_data.get(f"opponent_1_{base_feat}", b1_data.get(base_feat, 0))
-        elif "opponent_2" in feat:
+            col1 = f"opponent_1_{base_feat}"
+            col2 = f"opponent_2_{base_feat}"
+            if col1 in df.columns:
+                val = df[df["opponent_1_name_clean"] == b1][col1].mean()
+            if np.isnan(val) and col2 in df.columns:
+                val = df[df["opponent_2_name_clean"] == b1][col2].mean()
+            input_data[feat] = val if not np.isnan(val) else 0
+        else:
             base_feat = feat.replace("opponent_2_", "")
-            input_data[feat] = b2_data.get(f"opponent_2_{base_feat}", b2_data.get(base_feat, 0))
+            col1 = f"opponent_1_{base_feat}"
+            col2 = f"opponent_2_{base_feat}"
+            if col1 in df.columns:
+                val = df[df["opponent_1_name_clean"] == b2][col1].mean()
+            if np.isnan(val) and col2 in df.columns:
+                val = df[df["opponent_2_name_clean"] == b2][col2].mean()
+            input_data[feat] = val if not np.isnan(val) else 0
 
-    input_df = pd.DataFrame([input_data])
+    input_df = pd.DataFrame([input_data])[feature_names].fillna(0)
+    return model.predict_proba(input_df)[0]
 
-    # Sicherstellen, dass alle Features vorhanden sind
-    for col in feature_names:
-        if col not in input_df.columns:
-            input_df[col] = 0
+def predict_theoretical_match(boxer1, boxer2):
+    boxer_a, boxer_b = boxer1, boxer2
 
-    input_df = input_df[feature_names]
+    probs_a_first = predict_proba_for(boxer_a, boxer_b)
+    probs_b_first = predict_proba_for(boxer_b, boxer_a)
 
-    # Vorhersage
-    probs = model.predict_proba(input_df)[0]
-    pred = model.predict(input_df)[0]
+    prob_boxer_a = (probs_a_first[1] + probs_b_first[0]) / 2
+    prob_boxer_b = (probs_a_first[0] + probs_b_first[1]) / 2
 
-    # Ausgabe
     st.markdown("### 📈 Gewinnwahrscheinlichkeiten:")
-    st.write(f"**{boxer_a} gewinnt:** {probs[1]*100:.2f}%")
-    st.write(f"**{boxer_b} gewinnt:** {probs[0]*100:.2f}%")
+    st.write(f"**{boxer_a} gewinnt:** {prob_boxer_a * 100:.2f}%")
+    st.write(f"**{boxer_b} gewinnt:** {prob_boxer_b * 100:.2f}%")
 
-    sieger = boxer_a if pred == 1 else boxer_b
+    sieger = boxer_a if prob_boxer_a > prob_boxer_b else boxer_b
     st.markdown(f"### 🏆 Erwarteter Sieger: **{sieger}**")
 
 # 🧪 Button
 if st.button("🔮 Vorhersage starten"):
-    predict_theoretical_match(boxer1, boxer2, df, model, feature_names)
-
+    predict_theoretical_match(boxer1, boxer2)
